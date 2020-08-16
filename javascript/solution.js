@@ -24,7 +24,7 @@ const main = async () => {
     });
     const responseBodies = await Promise.all(responseBodyPromises);
     nodeIdsToGet = responseBodies.reduce((acc, body) => {
-      total += body.score;
+      total += body.reward;
       return acc.concat([body.left, body.right].filter(el => el !== null));
     }, []);
   }
@@ -33,12 +33,12 @@ const main = async () => {
 
 console.log("starting...");
 main()
-  .then(totalScore => {
-    console.log("result:", totalScore);
+  .then(total => {
+    console.log("result:", total);
     // this should take 4 cycles, each taking [1, 1, 5, 5] seconds to process
 
     // TODO: should take less than 10 seconds to process
-    assert.equal(totalScore, 3850);
+    assert.equal(total, 3850);
   })
   .catch(err => {
     console.log("program rejected with err:", err);
