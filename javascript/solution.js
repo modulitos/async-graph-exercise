@@ -35,8 +35,10 @@ console.log("starting...");
 main()
   .then(totalScore => {
     console.log("result:", totalScore);
-    // this should take 3 cycles:
-    assert.equal(totalScore, 1750);
+    // this should take 4 cycles, each taking [1, 1, 5, 5] seconds to process
+
+    // TODO: should take less than 10 seconds to process
+    assert.equal(totalScore, 3850);
   })
   .catch(err => {
     console.log("program rejected with err:", err);
