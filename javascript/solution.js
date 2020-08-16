@@ -13,7 +13,6 @@ const main = async () => {
   while (nodeIdsToGet.length > 0) {
     console.log("executing cycle, running total:", total);
 
-    // remove from front:
     const nextResponsePromises = nodeIdsToGet.map(async id => {
       const res = await fetch(`http://${HOST}:${PORT}/node/${id}`);
       return res;
@@ -36,7 +35,7 @@ console.log("starting...");
 main()
   .then(totalScore => {
     console.log("result:", totalScore);
-    // this should take 3 cycles
+    // this should take 3 cycles:
     assert.equal(totalScore, 1750);
   })
   .catch(err => {
