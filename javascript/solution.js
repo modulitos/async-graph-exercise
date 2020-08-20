@@ -4,7 +4,7 @@ const assert = require("assert");
 const HOST = "localhost";
 const PORT = 7878;
 
-const STARTING_NODE = 1;
+const STARTING_NODE = "a";
 
 // This solution leverages concurrency to calculate the solution in
 // the shortest amount of time possible. It calculates the result in 8
@@ -14,14 +14,14 @@ const STARTING_NODE = 1;
 
 // | time (sec) | nodes requests being processed  |
 // |------------+---------------------------------|
-// |          1 | 1                               |
-// |          2 | 5, 3                            |
-// |          3 | 6, 7, 9, 10                     |
-// |          4 | 6, 101, 102, 103, 104, 105, 106 |
-// |          5 | 6, 101, 102, 103, 104, 105, 106 |
-// |          6 | 6, 101, 102, 103, 104, 105, 106 |
-// |          7 | 6, 101, 102, 103, 104, 105, 106 |
-// |          8 | 101, 102, 103, 104, 105, 106    |
+// |          1 | a                               |
+// |          2 | c, e                            |
+// |          3 | f, g, i, j                      |
+// |          4 | f, s, t, u, v, w, x             |
+// |          5 | f, s, t, u, v, w, x             |
+// |          6 | f, s, t, u, v, w, x             |
+// |          7 | f, s, t, u, v, w, x             |
+// |          8 | s, t, u, v, w, x                |
 
 const main = async () => {
   let nodeIdsToGet = [STARTING_NODE];
@@ -69,7 +69,6 @@ const main = async () => {
   }
 };
 
-console.log("starting...");
 main()
   .then(total => {
     console.log("result:", total);
