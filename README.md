@@ -1,5 +1,5 @@
 
-Async Graph Traversal Problem
+# Async Graph Traversal Problem
 
 One of the trickiest, and yet most common, challenges in programming comes from dealing with concurrency and asynchronous code. We have a server already set up with some API endpoints to query. An example starting point is:
 
@@ -30,3 +30,11 @@ Notes:
 
 Please take your time to implement a sound and efficient solution. An optimal solution should take less than ten seconds to process.
 
+## Running the API server locally
+
+Clone the api repo:
+https://github.com/modulitos/async-graph-exercise-api/
+
+then run `cargo run`, and the api should be available at `localhost:7878`.
+
+Visit the api repo for more details.
