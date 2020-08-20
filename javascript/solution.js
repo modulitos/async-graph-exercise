@@ -24,17 +24,14 @@ const STARTING_NODE = 1;
 // |          8 | 101, 102, 103, 104, 105, 106    |
 
 const main = async () => {
-  // let nodeIdsToGet = [STARTING_NODE];
-  let nodeIdsToGet = new Set([STARTING_NODE]);
+  let nodeIdsToGet = [STARTING_NODE];
   let nodeIdsRetrieved = new Set();
   let idToPromises = {};
   let total = 0;
 
   while (true) {
-    if (nodeIdsToGet.size > 0) {
-      const idToNextPromises = [...nodeIdsToGet].reduce((acc, nodeId) => {
-        // delete the item from nodeIdsToGet, as it has been converted to a promise at this point.
-        nodeIdsToGet.delete(nodeId);
+    if (nodeIdsToGet.length > 0) {
+      const idToNextPromises = nodeIdsToGet.reduce((acc, nodeId) => {
         const promise = (async nodeId => {
           if (nodeIdsRetrieved.has(nodeId)) {
             // Skip processing nodes that have already been fetched.
@@ -45,7 +42,7 @@ const main = async () => {
           // Increment the reward:
           total += body.reward;
           // Add the node's children to the queue:
-          body.children.forEach(child => nodeIdsToGet.add(child));
+          body.children.forEach(child => nodeIdsToGet.push(child));
           // Mark the node as having already been retrieved.
           nodeIdsRetrieved.add(nodeId);
           // Remove the fetched node from our in-flight promises:
@@ -57,13 +54,9 @@ const main = async () => {
       }, {});
 
       // All of the pending node id's have been converted to Promises, so clear the queue.
-      // nodeIdsToGet = new Set();
-      // console.log("idToNextPromises:", idToNextPromises);
-      // .reduce((acc, promise, i) => {
-      //   acc[nodeIdsToGet[i]] = promise;
-      //   return acc;
-      // }, {});
-      // nodeIdsToGet = [];
+      // Note: this is not thread safe, but that's okay, this is Node!
+      nodeIdsToGet = [];
+
       // Add the new promises to our mapping.
       Object.assign(idToPromises, idToNextPromises);
     } else if (Object.values(idToPromises).length > 0) {
