@@ -17,7 +17,7 @@ Where the children in this example can be accessed via:
     GET https://graph.modulitos.com/node/e
 
 
-Your challenge is to write an algorithm that traverses the entire collection of nodes and returns the sum of their rewards. Each reward should only be counted a single time. The input to the algorithm will be a URL for a node to begin with, such as https://modulitos.com/node/a.
+Your challenge is to write an algorithm that traverses the entire collection of nodes and returns the sum of their rewards. Each reward should only be counted a single time. The input to the algorithm will be a URL for a node to begin with, such as https://graph.modulitos.com/node/a.
 
 The node whose JSON result appears above has a reward of 1, and it has links to two other nodes which are part of the collection.
 
@@ -37,4 +37,4 @@ https://github.com/modulitos/async-graph-exercise-api/
 
 then run `cargo run`, and the api should be available at `localhost:7878`.
 
-Visit the api repo for more details.
+That the api repo link above has more details about how the api works.
