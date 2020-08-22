@@ -1,8 +1,7 @@
 const fetch = require("node-fetch");
 const assert = require("assert");
 
-const HOST = "localhost";
-const PORT = 7878;
+const URL = "https://graph.modulitos.com";
 
 const STARTING_NODE = "a";
 
@@ -37,7 +36,7 @@ const main = async () => {
             // Skip processing nodes that have already been fetched.
             return null;
           }
-          const res = await fetch(`http://${HOST}:${PORT}/node/${nodeId}`);
+          const res = await fetch(`${URL}/node/${nodeId}`);
           const body = await res.json();
           // Increment the reward:
           total += body.reward;

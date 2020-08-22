@@ -3,7 +3,7 @@
 
 One of the trickiest, and yet most common, challenges in programming comes from dealing with concurrency and asynchronous code. We have a server already set up with some API endpoints to query. An example starting point is:
 
-    GET https://graph.example.com/node/a
+    GET https://graph.modulitos.com/node/a
 
 Each endpoint returns JSON of the form:
 
@@ -13,11 +13,11 @@ Each endpoint returns JSON of the form:
     }
 
 Where the children in this example can be accessed via:
-    GET https://graph.example.com/node/b
-    GET https://graph.example.com/node/e
+    GET https://graph.modulitos.com/node/b
+    GET https://graph.modulitos.com/node/e
 
 
-Your challenge is to write an algorithm that traverses the entire collection of nodes and returns the sum of their rewards. Each reward should only be counted a single time. The input to the algorithm will be a URL for a node to begin with, such as https://example.com/node/a.
+Your challenge is to write an algorithm that traverses the entire collection of nodes and returns the sum of their rewards. Each reward should only be counted a single time. The input to the algorithm will be a URL for a node to begin with, such as https://modulitos.com/node/a.
 
 The node whose JSON result appears above has a reward of 1, and it has links to two other nodes which are part of the collection.
 
