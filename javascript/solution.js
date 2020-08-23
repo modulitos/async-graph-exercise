@@ -71,7 +71,7 @@ const main = async () => {
 main()
   .then(total => {
     console.log("result:", total);
-    assert.equal(total, 3850);
+    assert.equal(total, 4250);
   })
   .catch(err => {
     console.log("program rejected with err:", err);
