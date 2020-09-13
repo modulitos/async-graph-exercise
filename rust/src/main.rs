@@ -34,6 +34,7 @@ type Node = char;
 
 #[derive(Default)]
 /// Handles the nodes
+/// TODO: consider leveraging a mpsc channel here instead of Arc/Mutexes?
 struct NodeTracker<'a> {
     // Nodes that have already been fetched and processed.
     visited: Arc<Mutex<HashSet<Node>>>,
@@ -123,8 +124,9 @@ impl<'a> NodeTracker<'a> {
 #[derive(Deserialize, Debug)]
 struct Response {
     children: Vec<Node>,
-    reward: u32,
+    reward: Reward,
 }
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut tracker = NodeTracker::default();
