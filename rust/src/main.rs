@@ -34,16 +34,25 @@ type Node = char;
 
 #[derive(Default)]
 /// Handles the nodes
-struct NodeTracker {
+struct NodeTracker<'a> {
     // Nodes that have already been fetched and processed.
     visited: Arc<Mutex<HashSet<Node>>>,
     // The next nodes that we want to fetch:
     next: Arc<Mutex<HashSet<Node>>>,
+    // The nodes currently being fetched, represented as Futures
+    pending_futures: Option<Vec<BoxFuture<'a, ()>>>,
+
     // Used for incrementing the rewards associated with each node:
     rewards: Arc<RewardIncrementer>,
 }
 
-impl NodeTracker {
+impl<'a> NodeTracker<'a> {
+    fn new() -> Self {
+        Self {
+            pending_futures: Some(vec![]),
+            ..Default::default()
+        }
+    }
     fn add_node(&mut self, node: Node) {
         let visited = self.visited.lock().unwrap();
         let mut next = self.next.lock().unwrap();
@@ -52,10 +61,7 @@ impl NodeTracker {
         }
     }
 
-    fn process_node(
-        &self,
-        node: Node,
-    ) -> impl Future {
+    fn process_node(&self, node: Node) -> impl Future<Output = ()> + 'a {
         let visited = self.visited.clone();
         let next = self.next.clone();
         let incrementer = self.rewards.clone();
@@ -85,7 +91,8 @@ impl NodeTracker {
     }
 
     // Drains the values stored in self.next, and maps them to futures where they can be collected.
-    fn transition_next_to_futures(&mut self) -> Vec<impl Future> {
+    // returns whether the pending futures are empty.
+    fn transition_next_nodes_to_futures(&mut self) {
         println!("transitioning futures: next: {:?}", self.next);
 
         // TODO: using std::mem::replace here results in weird errors. Are we not supposed to move
@@ -94,11 +101,29 @@ impl NodeTracker {
         // let next = std::mem::replace(&mut self.next, Arc::new(Mutex::new(HashSet::new())));
 
         let mut next = self.next.lock().unwrap();
-        next.drain()
-            .map( |node| {
-                self.process_node(node).boxed()
-            })
-            .collect()
+        let mut pending_futures = next
+            .drain()
+            .map(|node| self.process_node(node).boxed())
+            .collect::<Vec<BoxFuture<'a, ()>>>();
+
+        self.pending_futures
+            .as_mut()
+            .unwrap()
+            .append(&mut pending_futures);
+
+        println!(
+            "pending_futures.len(): {}\n",
+            self.pending_futures.as_ref().unwrap().len()
+        );
+    }
+
+    async fn wait_for_next_node(&mut self) {
+        let (_item_resolved, _index, pending) =
+            select_all(self.pending_futures.take().unwrap()).await;
+
+        println!("\npending.len(), after race: {}\n", pending.len());
+        // reset our pending futures to be the ones that are remaining:
+        self.pending_futures = Some(pending);
     }
 }
 
@@ -109,23 +134,16 @@ struct Response {
 }
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut tracker = NodeTracker::default();
+    let mut tracker = NodeTracker::new();
     tracker.add_node('a');
 
-    let mut pending_futures = Vec::new();
-
     loop {
-        let mut next_futures = tracker.transition_next_to_futures();
-        pending_futures.append(&mut next_futures);
-        println!("pending_futures.len(): {}\n", pending_futures.len());
-        if pending_futures.is_empty() {
+        tracker.transition_next_nodes_to_futures();
+        if tracker.pending_futures.as_ref().unwrap().is_empty() {
             break;
         } else {
             // Block until one of the futures is ready:
-            let (_item_resolved, _index, pending) = select_all(pending_futures).await;
-
-            println!("\npending.len(), after race: {}\n", pending.len());
-            pending_futures = pending;
+            tracker.wait_for_next_node().await;
         }
     }
 
@@ -135,9 +153,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn fetch_node(
-    node: Node,
-) -> Result<Response> {
+async fn fetch_node(node: Node) -> Result<Response> {
     let resp = reqwest::get(&format!("{}/node/{}", URL, node))
         .await?
         .json::<Response>()
