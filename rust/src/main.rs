@@ -40,19 +40,13 @@ struct NodeTracker<'a> {
     // The next nodes that we want to fetch:
     next: Arc<Mutex<HashSet<Node>>>,
     // The nodes currently being fetched, represented as Futures
-    pending_futures: Option<Vec<BoxFuture<'a, ()>>>,
+    pending_futures: Vec<BoxFuture<'a, ()>>,
 
     // Used for incrementing the rewards associated with each node:
     rewards: Arc<RewardIncrementer>,
 }
 
 impl<'a> NodeTracker<'a> {
-    fn new() -> Self {
-        Self {
-            pending_futures: Some(vec![]),
-            ..Default::default()
-        }
-    }
     fn add_node(&mut self, node: Node) {
         let visited = self.visited.lock().unwrap();
         let mut next = self.next.lock().unwrap();
@@ -107,23 +101,22 @@ impl<'a> NodeTracker<'a> {
             .collect::<Vec<BoxFuture<'a, ()>>>();
 
         self.pending_futures
-            .as_mut()
-            .unwrap()
             .append(&mut pending_futures);
 
         println!(
             "pending_futures.len(): {}\n",
-            self.pending_futures.as_ref().unwrap().len()
+            self.pending_futures.len()
         );
     }
 
     async fn wait_for_next_node(&mut self) {
-        let (_item_resolved, _index, pending) =
-            select_all(self.pending_futures.take().unwrap()).await;
+        let pending_futures = std::mem::replace(&mut self.pending_futures, vec![]);
+        let (_item_resolved, _index, mut pending) =
+            select_all(pending_futures).await;
 
         println!("\npending.len(), after race: {}\n", pending.len());
         // reset our pending futures to be the ones that are remaining:
-        self.pending_futures = Some(pending);
+        self.pending_futures.append(&mut pending);
     }
 }
 
@@ -134,12 +127,12 @@ struct Response {
 }
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut tracker = NodeTracker::new();
+    let mut tracker = NodeTracker::default();
     tracker.add_node('a');
 
     loop {
         tracker.transition_next_nodes_to_futures();
-        if tracker.pending_futures.as_ref().unwrap().is_empty() {
+        if tracker.pending_futures.is_empty() {
             break;
         } else {
             // Block until one of the futures is ready:
