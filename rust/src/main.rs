@@ -101,19 +101,14 @@ impl<'a> NodeTracker<'a> {
             .map(|node| self.process_node(node).boxed())
             .collect::<Vec<BoxFuture<'a, ()>>>();
 
-        self.pending_futures
-            .append(&mut pending_futures);
+        self.pending_futures.append(&mut pending_futures);
 
-        println!(
-            "pending_futures.len(): {}\n",
-            self.pending_futures.len()
-        );
+        println!("pending_futures.len(): {}\n", self.pending_futures.len());
     }
 
     async fn wait_for_next_node(&mut self) {
         let pending_futures = std::mem::replace(&mut self.pending_futures, vec![]);
-        let (_item_resolved, _index, mut pending) =
-            select_all(pending_futures).await;
+        let (_item_resolved, _index, mut pending) = select_all(pending_futures).await;
 
         println!("\npending.len(), after race: {}\n", pending.len());
         // reset our pending futures to be the ones that are remaining:
