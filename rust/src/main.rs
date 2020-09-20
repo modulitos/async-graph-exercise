@@ -4,7 +4,11 @@ use futures::future::{select_all, BoxFuture};
 use futures::FutureExt;
 use serde::Deserialize;
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::iter::FromIterator;
+use std::sync::mpsc::{sync_channel, Receiver, Sender};
+use std::sync::{mpsc::channel, Arc, Mutex};
+use std::thread;
+use std::thread::JoinHandle;
 use tokio::macros::support::Future;
 
 type Error = Box<dyn std::error::Error>;
@@ -14,25 +18,42 @@ const URL: &str = "https://graph.modulitos.com";
 
 type Reward = u32;
 
-#[derive(Default)]
-struct RewardIncrementer {
-    mutex: Mutex<Reward>,
+enum RewardMessage {
+    Increment(Reward),
+    Terminate,
 }
 
-impl RewardIncrementer {
-    fn increment(&self, reward: Reward) {
-        let mut lock = self.mutex.lock().unwrap();
-        *lock += reward;
+struct RewardCounter {
+    thread: JoinHandle<Reward>,
+}
+
+impl RewardCounter {
+    fn new(receiver: Receiver<RewardMessage>) -> Self {
+        let thread = thread::spawn(move || {
+            let mut total = 0;
+            loop {
+                use RewardMessage::*;
+                match receiver.recv().unwrap() {
+                    Increment(reward) => {
+                        total += reward;
+                    }
+                    Terminate => {
+                        break;
+                    }
+                }
+            }
+            total
+        });
+        Self { thread }
     }
 
-    fn value(&self) -> Reward {
-        *self.mutex.lock().unwrap()
+    fn join(self) -> Reward {
+        self.thread.join().unwrap()
     }
 }
 
 type Node = char;
 
-#[derive(Default)]
 /// Handles the nodes
 /// TODO: consider leveraging a mpsc channel here instead of Arc/Mutexes?
 struct NodeTracker<'a> {
@@ -43,23 +64,26 @@ struct NodeTracker<'a> {
     // The nodes currently being fetched, represented as Futures
     pending_futures: Vec<BoxFuture<'a, ()>>,
 
-    // Used for incrementing the rewards associated with each node:
-    rewards: Arc<RewardIncrementer>,
+    // Used for communicating the rewards for further processing:
+    reward_sender: Sender<RewardMessage>,
 }
 
 impl<'a> NodeTracker<'a> {
-    fn add_node(&mut self, node: Node) {
-        let visited = self.visited.lock().unwrap();
-        let mut next = self.next.lock().unwrap();
-        if !visited.contains(&node) && !next.contains(&node) {
-            next.insert(node);
+    fn new(sender: Sender<RewardMessage>, starting_node: char) -> Self {
+        Self {
+            visited: Arc::new(Mutex::new(HashSet::new())),
+            next: Arc::new(Mutex::new(HashSet::from_iter(
+                std::iter::repeat(starting_node).take(1),
+            ))),
+            pending_futures: vec![],
+            reward_sender: sender,
         }
     }
 
-    fn process_node(&self, node: Node) -> impl Future<Output = ()> + 'a {
+    fn _process_node(&self, node: Node) -> impl Future<Output = ()> + 'a {
         let visited = self.visited.clone();
         let next = self.next.clone();
-        let incrementer = self.rewards.clone();
+        let reward_sender = self.reward_sender.clone();
         async move {
             let resp = fetch_node(node)
                 .await
@@ -67,7 +91,7 @@ impl<'a> NodeTracker<'a> {
 
             println!("resp from '{}': {:?}", node, resp);
 
-            incrementer.increment(resp.reward);
+            reward_sender.send(RewardMessage::Increment(resp.reward));
 
             // Add the children to the "next" set, but only if they are not already within the
             // "visited" set.
@@ -87,18 +111,13 @@ impl<'a> NodeTracker<'a> {
 
     // Drains the values stored in self.next, and maps them to futures where they can be collected.
     // returns whether the pending futures are empty.
-    fn transition_next_nodes_to_futures(&mut self) {
+    fn _transition_next_nodes_to_futures(&mut self) {
         println!("transitioning futures: next: {:?}", self.next);
-
-        // TODO: using std::mem::replace here results in weird errors. Are we not supposed to move
-        // the data behind an Arc???
-
-        // let next = std::mem::replace(&mut self.next, Arc::new(Mutex::new(HashSet::new())));
 
         let mut next = self.next.lock().unwrap();
         let mut pending_futures = next
             .drain()
-            .map(|node| self.process_node(node).boxed())
+            .map(|node| self._process_node(node).boxed())
             .collect::<Vec<BoxFuture<'a, ()>>>();
 
         self.pending_futures.append(&mut pending_futures);
@@ -106,13 +125,26 @@ impl<'a> NodeTracker<'a> {
         println!("pending_futures.len(): {}\n", self.pending_futures.len());
     }
 
-    async fn wait_for_next_node(&mut self) {
+    async fn _wait_for_next_node(&mut self) {
         let pending_futures = std::mem::replace(&mut self.pending_futures, vec![]);
         let (_item_resolved, _index, mut pending) = select_all(pending_futures).await;
 
         println!("\npending.len(), after race: {}\n", pending.len());
         // reset our pending futures to be the ones that are remaining:
         self.pending_futures.append(&mut pending);
+    }
+
+    async fn run(mut self) {
+        loop {
+            self._transition_next_nodes_to_futures();
+            if self.pending_futures.is_empty() {
+                self.reward_sender.send(RewardMessage::Terminate).unwrap();
+                break;
+            } else {
+                // Block until one of the futures is ready:
+                self._wait_for_next_node().await;
+            }
+        }
     }
 }
 
@@ -124,22 +156,17 @@ struct Response {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut tracker = NodeTracker::default();
-    tracker.add_node('a');
+    let (reward_sender, reward_receiver) = channel();
+    let tracker = NodeTracker::new(reward_sender, 'a');
 
-    loop {
-        tracker.transition_next_nodes_to_futures();
-        if tracker.pending_futures.is_empty() {
-            break;
-        } else {
-            // Block until one of the futures is ready:
-            tracker.wait_for_next_node().await;
-        }
-    }
+    let worker = RewardCounter::new(reward_receiver);
+    tracker.run().await;
 
-    let total = tracker.rewards.value();
-    println!("total: {}", total);
+    let total = worker.join();
+
+    println!("final total: {}", total);
     assert_eq!(total, 4250);
+
     Ok(())
 }
 
