@@ -4,7 +4,10 @@ use futures::future::{select_all, BoxFuture};
 use futures::FutureExt;
 use serde::Deserialize;
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{sync_channel, Receiver, Sender};
+use std::sync::{mpsc::channel, Arc, Mutex};
+use std::thread;
+use std::thread::JoinHandle;
 use tokio::macros::support::Future;
 
 type Error = Box<dyn std::error::Error>;
@@ -14,25 +17,43 @@ const URL: &str = "https://graph.modulitos.com";
 
 type Reward = u32;
 
-#[derive(Default)]
-struct RewardIncrementer {
-    mutex: Mutex<Reward>,
+enum RewardMessage {
+    Increment(Reward),
+    Terminate,
 }
 
-impl RewardIncrementer {
-    fn increment(&self, reward: Reward) {
-        let mut lock = self.mutex.lock().unwrap();
-        *lock += reward;
+struct RewardCounter {
+    thread: JoinHandle<Reward>,
+}
+
+impl RewardCounter {
+    fn new(receiver: Receiver<RewardMessage>) -> Self {
+        let thread = thread::spawn(move || {
+            let mut total = 0;
+            loop {
+                use RewardMessage::*;
+                match receiver.recv().unwrap() {
+                    Increment(reward) => {
+                        total += reward;
+                        println!("total: {}", total);
+                    }
+                    Terminate => {
+                        break;
+                    }
+                }
+            }
+            total
+        });
+        Self { thread }
     }
 
-    fn value(&self) -> Reward {
-        *self.mutex.lock().unwrap()
+    fn join(self) -> Reward {
+        self.thread.join().unwrap()
     }
 }
 
 type Node = char;
 
-#[derive(Default)]
 /// Handles the nodes
 /// TODO: consider leveraging a mpsc channel here instead of Arc/Mutexes?
 struct NodeTracker<'a> {
@@ -43,11 +64,20 @@ struct NodeTracker<'a> {
     // The nodes currently being fetched, represented as Futures
     pending_futures: Vec<BoxFuture<'a, ()>>,
 
-    // Used for incrementing the rewards associated with each node:
-    rewards: Arc<RewardIncrementer>,
+    // Used for communicating the rewards for further processing:
+    reward_sender: Sender<RewardMessage>,
 }
 
 impl<'a> NodeTracker<'a> {
+    fn new(sender: Sender<RewardMessage>) -> Self {
+        Self {
+            visited: Arc::new(Mutex::new(HashSet::new())),
+            next: Arc::new(Mutex::new(HashSet::new())),
+            pending_futures: vec![],
+            reward_sender: sender,
+        }
+    }
+
     fn add_node(&mut self, node: Node) {
         let visited = self.visited.lock().unwrap();
         let mut next = self.next.lock().unwrap();
@@ -59,7 +89,7 @@ impl<'a> NodeTracker<'a> {
     fn process_node(&self, node: Node) -> impl Future<Output = ()> + 'a {
         let visited = self.visited.clone();
         let next = self.next.clone();
-        let incrementer = self.rewards.clone();
+        let reward_sender = self.reward_sender.clone();
         async move {
             let resp = fetch_node(node)
                 .await
@@ -67,7 +97,7 @@ impl<'a> NodeTracker<'a> {
 
             println!("resp from '{}': {:?}", node, resp);
 
-            incrementer.increment(resp.reward);
+            reward_sender.send(RewardMessage::Increment(resp.reward));
 
             // Add the children to the "next" set, but only if they are not already within the
             // "visited" set.
@@ -114,6 +144,19 @@ impl<'a> NodeTracker<'a> {
         // reset our pending futures to be the ones that are remaining:
         self.pending_futures.append(&mut pending);
     }
+
+    async fn run(&mut self) {
+        loop {
+            self.transition_next_nodes_to_futures();
+            if self.pending_futures.is_empty() {
+                self.reward_sender.send(RewardMessage::Terminate).unwrap();
+                break;
+            } else {
+                // Block until one of the futures is ready:
+                self.wait_for_next_node().await;
+            }
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -124,22 +167,18 @@ struct Response {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut tracker = NodeTracker::default();
+    let (reward_sender, receiver) = channel();
+    let mut tracker = NodeTracker::new(reward_sender);
     tracker.add_node('a');
 
-    loop {
-        tracker.transition_next_nodes_to_futures();
-        if tracker.pending_futures.is_empty() {
-            break;
-        } else {
-            // Block until one of the futures is ready:
-            tracker.wait_for_next_node().await;
-        }
-    }
+    let worker = RewardCounter::new(receiver);
+    tracker.run().await;
 
-    let total = tracker.rewards.value();
-    println!("total: {}", total);
+    let total = worker.join();
+
+    println!("final total: {}", total);
     assert_eq!(total, 4250);
+
     Ok(())
 }
 
