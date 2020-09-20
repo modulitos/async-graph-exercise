@@ -4,6 +4,7 @@ use futures::future::{select_all, BoxFuture};
 use futures::FutureExt;
 use serde::Deserialize;
 use std::collections::HashSet;
+use std::iter::FromIterator;
 use std::sync::mpsc::{sync_channel, Receiver, Sender};
 use std::sync::{mpsc::channel, Arc, Mutex};
 use std::thread;
@@ -35,7 +36,6 @@ impl RewardCounter {
                 match receiver.recv().unwrap() {
                     Increment(reward) => {
                         total += reward;
-                        println!("total: {}", total);
                     }
                     Terminate => {
                         break;
@@ -69,24 +69,18 @@ struct NodeTracker<'a> {
 }
 
 impl<'a> NodeTracker<'a> {
-    fn new(sender: Sender<RewardMessage>) -> Self {
+    fn new(sender: Sender<RewardMessage>, starting_node: char) -> Self {
         Self {
             visited: Arc::new(Mutex::new(HashSet::new())),
-            next: Arc::new(Mutex::new(HashSet::new())),
+            next: Arc::new(Mutex::new(HashSet::from_iter(
+                std::iter::repeat(starting_node).take(1),
+            ))),
             pending_futures: vec![],
             reward_sender: sender,
         }
     }
 
-    fn add_node(&mut self, node: Node) {
-        let visited = self.visited.lock().unwrap();
-        let mut next = self.next.lock().unwrap();
-        if !visited.contains(&node) && !next.contains(&node) {
-            next.insert(node);
-        }
-    }
-
-    fn process_node(&self, node: Node) -> impl Future<Output = ()> + 'a {
+    fn _process_node(&self, node: Node) -> impl Future<Output = ()> + 'a {
         let visited = self.visited.clone();
         let next = self.next.clone();
         let reward_sender = self.reward_sender.clone();
@@ -117,18 +111,13 @@ impl<'a> NodeTracker<'a> {
 
     // Drains the values stored in self.next, and maps them to futures where they can be collected.
     // returns whether the pending futures are empty.
-    fn transition_next_nodes_to_futures(&mut self) {
+    fn _transition_next_nodes_to_futures(&mut self) {
         println!("transitioning futures: next: {:?}", self.next);
-
-        // TODO: using std::mem::replace here results in weird errors. Are we not supposed to move
-        // the data behind an Arc???
-
-        // let next = std::mem::replace(&mut self.next, Arc::new(Mutex::new(HashSet::new())));
 
         let mut next = self.next.lock().unwrap();
         let mut pending_futures = next
             .drain()
-            .map(|node| self.process_node(node).boxed())
+            .map(|node| self._process_node(node).boxed())
             .collect::<Vec<BoxFuture<'a, ()>>>();
 
         self.pending_futures.append(&mut pending_futures);
@@ -136,7 +125,7 @@ impl<'a> NodeTracker<'a> {
         println!("pending_futures.len(): {}\n", self.pending_futures.len());
     }
 
-    async fn wait_for_next_node(&mut self) {
+    async fn _wait_for_next_node(&mut self) {
         let pending_futures = std::mem::replace(&mut self.pending_futures, vec![]);
         let (_item_resolved, _index, mut pending) = select_all(pending_futures).await;
 
@@ -145,15 +134,15 @@ impl<'a> NodeTracker<'a> {
         self.pending_futures.append(&mut pending);
     }
 
-    async fn run(&mut self) {
+    async fn run(mut self) {
         loop {
-            self.transition_next_nodes_to_futures();
+            self._transition_next_nodes_to_futures();
             if self.pending_futures.is_empty() {
                 self.reward_sender.send(RewardMessage::Terminate).unwrap();
                 break;
             } else {
                 // Block until one of the futures is ready:
-                self.wait_for_next_node().await;
+                self._wait_for_next_node().await;
             }
         }
     }
@@ -167,11 +156,10 @@ struct Response {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let (reward_sender, receiver) = channel();
-    let mut tracker = NodeTracker::new(reward_sender);
-    tracker.add_node('a');
+    let (reward_sender, reward_receiver) = channel();
+    let tracker = NodeTracker::new(reward_sender, 'a');
 
-    let worker = RewardCounter::new(receiver);
+    let worker = RewardCounter::new(reward_receiver);
     tracker.run().await;
 
     let total = worker.join();
