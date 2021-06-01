@@ -23,16 +23,39 @@ func (m *MockClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 func TestCallSuccess(t *testing.T) {
+	// TODO: make this into multiple tests using a map with "args" and "wanted"
+	// structs.
 	fmt.Println("testing")
 	// Given:
+
+	type args struct {
+		// children []char
+		// reward
+		nodeId byte
+	}
+
+	type want struct {
+		reward int
+	}
+
+	cases := map[string]struct {
+		args
+		want
+	}{
+		"happy": {
+			args: args{nodeId: 'a'},
+			want: want{reward: 100},
+		},
+	}
+
 	jsonResponse := `{
 		"children": [],
 		"reward": 100
 	}`
 	r := ioutil.NopCloser(bytes.NewReader([]byte(jsonResponse)))
+
 	Client = &MockClient{
 		MockDo: func(*http.Request) (*http.Response, error) {
-			fmt.Println("inside mock!")
 			return &http.Response{
 				StatusCode: 200,
 				Body:       r,
@@ -40,11 +63,18 @@ func TestCallSuccess(t *testing.T) {
 		},
 	}
 
-	// When:
-	score, err := CalculateReward("asdf")
-
-	// Then
+	// iterate over all our test cases:
 	g := NewGomegaWithT(t)
-	g.Expect(err).To(BeNil(), "Got an error back!")
-	g.Expect(score).To(Equal(100), "Reward doesn't match up!")
+	for name, testCase := range cases {
+
+		t.Run(name, func(t *testing.T) {
+
+			// When:
+			score, err := CalculateReward(GetUrlForNode(testCase.args.nodeId))
+
+			// Then
+			g.Expect(err).To(BeNil(), "Got an error back!")
+			g.Expect(score).To(Equal(testCase.want.reward), "Reward doesn't match up!")
+		})
+	}
 }

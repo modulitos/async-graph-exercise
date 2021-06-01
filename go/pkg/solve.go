@@ -26,6 +26,10 @@ func init() {
 	Client = &http.Client{}
 }
 
+func GetUrlForNode(nodeId byte) string {
+	return fmt.Sprintf("https://graph.modulitos.com/node/%b", nodeId)
+}
+
 func CalculateReward(url string) (int, error) {
 	// https://blog.golang.org/json
 	// https://medium.com/@fsufitch/deserializing-json-in-go-a-tutorial-d042412958ea
@@ -47,6 +51,5 @@ func CalculateReward(url string) (int, error) {
 }
 
 func main() {
-	url := "https://graph.modulitos.com/node/a"
-	CalculateReward(url)
+	CalculateReward(GetUrlForNode('a'))
 }
