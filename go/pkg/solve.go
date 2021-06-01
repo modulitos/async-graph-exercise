@@ -40,13 +40,10 @@ func CalculateReward(url string) (int, error) {
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
-	fmt.Printf("body: %s\n", body)
 	var data NodeJSON
 	if err := json.Unmarshal(body, &data); err != nil {
-		fmt.Println("failed to unmarshal:", err)
 		return -1, err
 	}
-	fmt.Printf("data.Reward: %d\n", data.Reward)
 	return data.Reward, nil
 }
 

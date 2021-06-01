@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"fmt"
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"testing"
@@ -22,15 +22,26 @@ func (m *MockClient) Do(req *http.Request) (*http.Response, error) {
 	return m.MockDo(req)
 }
 
-func TestCallSuccess(t *testing.T) {
-	// TODO: make this into multiple tests using a map with "args" and "wanted"
-	// structs.
-	fmt.Println("testing")
-	// Given:
+func setupMock(state map[byte]NodeJSON) {
+	// Override the client that gets set in our main function:
+	Client = &MockClient{
+		MockDo: func(req *http.Request) (*http.Response, error) {
+			nodeId := []byte(req.URL.String())[0]
+			jsonResponse, err := json.Marshal(state[nodeId])
+			if err != nil {
+				return nil, err
+			}
+			r := ioutil.NopCloser(bytes.NewReader([]byte(jsonResponse)))
+			return &http.Response{
+				StatusCode: 200,
+				Body:       r,
+			}, nil
+		},
+	}
+}
 
+func TestCallSuccess(t *testing.T) {
 	type args struct {
-		// children []char
-		// reward
 		nodeId byte
 	}
 
@@ -42,35 +53,36 @@ func TestCallSuccess(t *testing.T) {
 		args
 		want
 	}{
-		"happy": {
+		"one node 100": {
 			args: args{nodeId: 'a'},
 			want: want{reward: 100},
 		},
-	}
-
-	jsonResponse := `{
-		"children": [],
-		"reward": 100
-	}`
-	r := ioutil.NopCloser(bytes.NewReader([]byte(jsonResponse)))
-
-	Client = &MockClient{
-		MockDo: func(*http.Request) (*http.Response, error) {
-			return &http.Response{
-				StatusCode: 200,
-				Body:       r,
-			}, nil
+		"one node 200": {
+			args: args{nodeId: 'b'},
+			want: want{reward: 200},
 		},
 	}
+
+	setupMock(map[byte]NodeJSON{
+		'a': {
+			Children: []string{},
+			Reward:   100,
+		},
+		'b': {
+			Children: []string{},
+			Reward:   200,
+		},
+	})
 
 	// iterate over all our test cases:
 	g := NewGomegaWithT(t)
 	for name, testCase := range cases {
 
 		t.Run(name, func(t *testing.T) {
+			// Given the testCase:
 
 			// When:
-			score, err := CalculateReward(GetUrlForNode(testCase.args.nodeId))
+			score, err := CalculateReward(string(testCase.args.nodeId))
 
 			// Then
 			g.Expect(err).To(BeNil(), "Got an error back!")
