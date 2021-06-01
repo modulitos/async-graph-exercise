@@ -61,6 +61,11 @@ func TestCallSuccess(t *testing.T) {
 			args: args{nodeId: 'b'},
 			want: want{reward: 200},
 		},
+		// // TODO: make this test pass!
+		// "one node, 1 child": {
+		// 	args: args{nodeId: 'c'},
+		// 	want: want{reward: 400},
+		// },
 	}
 
 	setupMock(map[byte]NodeJSON{
@@ -71,6 +76,10 @@ func TestCallSuccess(t *testing.T) {
 		'b': {
 			Children: []string{},
 			Reward:   200,
+		},
+		'c': {
+			Children: []string{"a"},
+			Reward:   300,
 		},
 	})
 
