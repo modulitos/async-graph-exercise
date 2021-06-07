@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"testing"
@@ -11,7 +13,8 @@ import (
 )
 
 // Custom type that allows setting the func that our Mock Do func will run
-// instead
+// instead. Borrowed from here:
+// https://levelup.gitconnected.com/mocking-outbound-http-calls-in-golang-9e5a044c2555
 type MockDoType func(req *http.Request) (*http.Response, error)
 
 type MockClient struct {
@@ -22,12 +25,15 @@ func (m *MockClient) Do(req *http.Request) (*http.Response, error) {
 	return m.MockDo(req)
 }
 
-func setupMock(state map[byte]NodeJSON) {
+func setupMock(state map[string]NodeJSON) {
 	// Override the client that gets set in our main function:
 	Client = &MockClient{
 		MockDo: func(req *http.Request) (*http.Response, error) {
-			nodeId := []byte(req.URL.String())[0]
-			jsonResponse, err := json.Marshal(state[nodeId])
+			value, mapContainsKey := state[req.URL.String()]
+			if !mapContainsKey {
+				return nil, errors.New(fmt.Sprintf("mock is not configured with nodeId: %s", req.URL))
+			}
+			jsonResponse, err := json.Marshal(value)
 			if err != nil {
 				return nil, err
 			}
@@ -61,23 +67,23 @@ func TestCallSuccess(t *testing.T) {
 			args: args{nodeId: 'b'},
 			want: want{reward: 200},
 		},
-		// // TODO: make this test pass!
+		// TODO: make this test pass!
 		// "one node, 1 child": {
 		// 	args: args{nodeId: 'c'},
 		// 	want: want{reward: 400},
 		// },
 	}
 
-	setupMock(map[byte]NodeJSON{
-		'a': {
+	setupMock(map[string]NodeJSON{
+		GetUriForNode('a'): {
 			Children: []string{},
 			Reward:   100,
 		},
-		'b': {
+		GetUriForNode('b'): {
 			Children: []string{},
 			Reward:   200,
 		},
-		'c': {
+		GetUriForNode('c'): {
 			Children: []string{"a"},
 			Reward:   300,
 		},
@@ -91,11 +97,11 @@ func TestCallSuccess(t *testing.T) {
 			// Given the testCase:
 
 			// When:
-			score, err := CalculateReward(string(testCase.args.nodeId))
+			score, err := CalculateReward(testCase.args.nodeId)
 
 			// Then
-			g.Expect(err).To(BeNil(), "Got an error back!")
-			g.Expect(score).To(Equal(testCase.want.reward), "Reward doesn't match up!")
+			g.Expect(err).To(BeNil(), "Unexpected error in test.")
+			g.Expect(score).To(Equal(testCase.want.reward), "Unexpected reward value.")
 		})
 	}
 }
