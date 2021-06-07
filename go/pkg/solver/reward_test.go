@@ -1,4 +1,4 @@
-package main
+package solver
 
 import (
 	"bytes"
@@ -67,7 +67,7 @@ func TestCallSuccess(t *testing.T) {
 			args: args{nodeId: 'b'},
 			want: want{reward: 200},
 		},
-		// TODO: make this test pass!
+		// // TODO: make this test pass!
 		// "one node, 1 child": {
 		// 	args: args{nodeId: 'c'},
 		// 	want: want{reward: 400},
@@ -104,4 +104,17 @@ func TestCallSuccess(t *testing.T) {
 			g.Expect(score).To(Equal(testCase.want.reward), "Unexpected reward value.")
 		})
 	}
+}
+
+func TestGetUriForNode(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	// Given:
+	var nodeId byte = 'a'
+
+	// When:
+	res := GetUriForNode(nodeId)
+
+	// Then:
+	g.Expect(res).To(Equal("https://graph.modulitos.com/node/a"))
 }

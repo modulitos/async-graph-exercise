@@ -1,4 +1,4 @@
-package main
+package solver
 
 import (
 	"encoding/json"
@@ -27,7 +27,7 @@ func init() {
 }
 
 func GetUriForNode(nodeId byte) string {
-	return fmt.Sprintf("https://graph.modulitos.com/node/%b", nodeId)
+	return fmt.Sprintf("https://graph.modulitos.com/node/%s", string(nodeId))
 }
 
 func crawlNode(nodeUri string, ch chan int) (int, error) {
@@ -59,16 +59,4 @@ func CalculateReward(nodeId byte) (int, error) {
 
 	<-ch
 	return reward, err
-
-}
-
-func main() {
-	var nodeId byte = 'a'
-	reward, err := CalculateReward(nodeId)
-
-	if err != nil {
-		panic(fmt.Sprintf("error! %s", err))
-	} else {
-		println("youre reward is: %d", reward)
-	}
 }
