@@ -79,6 +79,11 @@ func TestCallSuccess(t *testing.T) {
 			args: args{nodeId: 'e'},
 			want: want{reward: 900},
 		},
+		// // TODO: test error handling
+		// "one node, which doesn't exist": {
+		// 	args: args{nodeId: 'z'},
+		// 	want: want{err: "mock is not configured with nodeId: z"},
+		// },
 	}
 
 	setupMock(map[string]NodeJSON{

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 )
 
 type NodeJSON struct {
@@ -49,26 +50,30 @@ func crawlNode(nodeUri string, ch chan int, errs chan error) {
 		return
 	}
 
-	chans := make([]chan int, len(data.Children))
-	fmt.Println("children: ", data.Children)
+	childChans := make([]chan int, len(data.Children))
 	for i, nodeUri := range data.Children {
-		chans[i] = make(chan int)
-		go crawlNode(nodeUri, chans[i], errs)
+		childChans[i] = make(chan int)
+		go crawlNode(nodeUri, childChans[i], errs)
 	}
 
 	totalReward := data.Reward
 
-	for i := range chans {
+	wg := new(sync.WaitGroup)
+	wg.Add(len(data.Children))
+	for i := range childChans {
+		go func(childChan chan int) {
+			defer wg.Done()
+			select {
+			case err := <-errs:
+				errs <- err
+				return
+			case reward := <-childChan:
+				totalReward += reward
+			}
+		}(childChans[i])
 
-		// TODO: don't do this in band!
-		select {
-		case err := <-errs:
-			errs <- err
-			return
-		case reward := <-chans[i]:
-			totalReward += reward
-		}
 	}
+	wg.Wait()
 
 	ch <- totalReward
 }
@@ -81,6 +86,7 @@ func CalculateReward(nodeId byte) (int, error) {
 
 
 	select {
+	// What if there are both errors and results?
 	case err := <-errs:
 		return -1, err
 	case reward := <-ch:
