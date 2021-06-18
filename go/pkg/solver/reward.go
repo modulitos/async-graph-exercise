@@ -30,33 +30,42 @@ func GetUriForNode(nodeId byte) string {
 	return fmt.Sprintf("https://graph.modulitos.com/node/%s", string(nodeId))
 }
 
-func crawlNode(nodeUri string, ch chan int) (int, error) {
+func crawlNode(nodeUri string, ch chan int, errs chan error) {
 	// TODO: leverage a cache that checks whether a node has already been
 	// visited.
 	defer close(ch)
+	defer close(errs)
 
-	// https://blog.golang.org/json
-	// https://medium.com/@fsufitch/deserializing-json-in-go-a-tutorial-d042412958ea
 	request, err := http.NewRequest(http.MethodGet, nodeUri, nil)
 	resp, err := Client.Do(request)
 	if err != nil {
-		return -1, err
+		errs <- err
+		return
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	var data NodeJSON
 	if err := json.Unmarshal(body, &data); err != nil {
-		return -1, err
+		errs <- err
+		return
 	}
 
-	return data.Reward, nil
+	totalReward := data.Reward
+
+	ch <- totalReward
 }
 
 func CalculateReward(nodeId byte) (int, error) {
-	ch := make(chan int)
+	ch := make(chan int, 1)
+	errs := make(chan error, 1)
 
-	reward, err := crawlNode(GetUriForNode(nodeId), ch)
+	go crawlNode(GetUriForNode(nodeId), ch, errs)
 
-	<-ch
-	return reward, err
+
+	select {
+	case err := <-errs:
+		return -1, err
+	case reward := <-ch:
+		return reward, nil
+	}
 }
