@@ -67,11 +67,18 @@ func TestCallSuccess(t *testing.T) {
 			args: args{nodeId: 'b'},
 			want: want{reward: 200},
 		},
-		// // TODO: make this test pass!
-		// "one node, 1 child": {
-		// 	args: args{nodeId: 'c'},
-		// 	want: want{reward: 400},
-		// },
+		"one node, 1 child": {
+			args: args{nodeId: 'c'},
+			want: want{reward: 400},
+		},
+		"one node, 2 children": {
+			args: args{nodeId: 'd'},
+			want: want{reward: 700},
+		},
+		"one node, with grandchildren": {
+			args: args{nodeId: 'e'},
+			want: want{reward: 900},
+		},
 	}
 
 	setupMock(map[string]NodeJSON{
@@ -84,8 +91,16 @@ func TestCallSuccess(t *testing.T) {
 			Reward:   200,
 		},
 		GetUriForNode('c'): {
-			Children: []string{"a"},
+			Children: []string{GetUriForNode('a')},
 			Reward:   300,
+		},
+		GetUriForNode('d'): {
+			Children: []string{GetUriForNode('a'), GetUriForNode('b')},
+			Reward:   400,
+		},
+		GetUriForNode('e'): {
+			Children: []string{GetUriForNode('c')},
+			Reward:   500,
 		},
 	})
 
