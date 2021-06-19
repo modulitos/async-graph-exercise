@@ -27,25 +27,56 @@ func init() {
 	Client = &http.Client{}
 }
 
-func GetUriForNode(nodeId byte) string {
-	return fmt.Sprintf("https://graph.modulitos.com/node/%s", string(nodeId))
+type NodeFormatter struct {
+	baseUrl string
 }
 
-func crawlNode(nodeUri string, ch chan int, errs chan error) {
+func NewNodeFormatter() NodeFormatter {
+	return NodeFormatter{
+		baseUrl: "https://graph.modulitos.com/node/",
+	}
+}
+
+func (nf *NodeFormatter) GetUriForNode(nodeId byte) string {
+	return fmt.Sprintf(nf.baseUrl+"%s", string(nodeId))
+}
+
+type NodeService struct {
+	client    HttpClient
+	formatter NodeFormatter
+}
+
+func (ns *NodeService) GetNode(nodeId byte) (NodeJSON, error) {
 	// TODO: leverage a cache that checks whether a node has already been
 	// visited.
-	defer close(ch)
-
+	nodeUri := ns.formatter.GetUriForNode(nodeId)
 	request, err := http.NewRequest(http.MethodGet, nodeUri, nil)
 	resp, err := Client.Do(request)
 	if err != nil {
-		errs <- err
-		return
+		return NodeJSON{}, err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	var data NodeJSON
 	if err := json.Unmarshal(body, &data); err != nil {
+		return NodeJSON{}, err
+	}
+	return data, nil
+}
+
+func NewNodeService() NodeService {
+	return NodeService{
+		client:    Client,
+		formatter: NewNodeFormatter(),
+	}
+}
+
+func crawlNode(nodeId byte, ch chan int, errs chan error, nodeService NodeService) {
+	defer close(ch)
+
+	data, err := nodeService.GetNode(nodeId)
+
+	if err != nil {
 		errs <- err
 		return
 	}
@@ -53,8 +84,7 @@ func crawlNode(nodeUri string, ch chan int, errs chan error) {
 	childChans := make([]chan int, len(data.Children))
 	for i, nodeId := range data.Children {
 		childChans[i] = make(chan int)
-		// unsafe cast from string to byte:
-		go crawlNode(GetUriForNode(nodeId[0]), childChans[i], errs)
+		go crawlNode(nodeId[0], childChans[i], errs, nodeService)
 	}
 
 	totalReward := data.Reward
@@ -87,8 +117,9 @@ func CalculateReward(nodeId byte) (int, error) {
 	ch := make(chan int, 1)
 	errs := make(chan error, 1)
 
-	go crawlNode(GetUriForNode(nodeId), ch, errs)
+	nodeService := NewNodeService()
 
+	go crawlNode(nodeId, ch, errs, nodeService)
 
 	select {
 	// What if there are both errors and results?

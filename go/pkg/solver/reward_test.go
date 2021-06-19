@@ -51,6 +51,7 @@ func setupMock(state map[string]NodeJSON) {
 // and https://dave.cheney.net/2013/06/09/writing-table-driven-tests-in-go
 // and https://dave.cheney.net/2019/05/07/prefer-table-driven-tests
 func TestCalculateReward(t *testing.T) {
+	formatter := NewNodeFormatter()
 	type args struct {
 		nodeId byte
 	}
@@ -91,23 +92,23 @@ func TestCalculateReward(t *testing.T) {
 	}
 
 	setupMock(map[string]NodeJSON{
-		GetUriForNode('a'): {
+		formatter.GetUriForNode('a'): {
 			Children: []string{},
 			Reward:   100,
 		},
-		GetUriForNode('b'): {
+		formatter.GetUriForNode('b'): {
 			Children: []string{},
 			Reward:   200,
 		},
-		GetUriForNode('c'): {
+		formatter.GetUriForNode('c'): {
 			Children: []string{"a"},
 			Reward:   300,
 		},
-		GetUriForNode('d'): {
+		formatter.GetUriForNode('d'): {
 			Children: []string{"a", "b"},
 			Reward:   400,
 		},
-		GetUriForNode('e'): {
+		formatter.GetUriForNode('e'): {
 			Children: []string{"c"},
 			Reward:   500,
 		},
@@ -137,7 +138,8 @@ func TestGetUriForNode(t *testing.T) {
 	var nodeId byte = 'a'
 
 	// When:
-	res := GetUriForNode(nodeId)
+	formatter := NewNodeFormatter()
+	res := formatter.GetUriForNode(nodeId)
 
 	// Then:
 	g.Expect(res).To(Equal("https://graph.modulitos.com/node/a"))
