@@ -46,7 +46,10 @@ func setupMock(state map[string]NodeJSON) {
 	}
 }
 
-func TestCallSuccess(t *testing.T) {
+// "table-driven tests" inspired by:
+// https://nathanleclaire.com/blog/2015/10/10/interfaces-and-composition-for-effective-unit-testing-in-golang/
+// and https://dave.cheney.net/2013/06/09/writing-table-driven-tests-in-go
+func TestCalculateReward(t *testing.T) {
 	type args struct {
 		nodeId byte
 	}
@@ -96,15 +99,15 @@ func TestCallSuccess(t *testing.T) {
 			Reward:   200,
 		},
 		GetUriForNode('c'): {
-			Children: []string{GetUriForNode('a')},
+			Children: []string{"a"},
 			Reward:   300,
 		},
 		GetUriForNode('d'): {
-			Children: []string{GetUriForNode('a'), GetUriForNode('b')},
+			Children: []string{"a", "b"},
 			Reward:   400,
 		},
 		GetUriForNode('e'): {
-			Children: []string{GetUriForNode('c')},
+			Children: []string{"c"},
 			Reward:   500,
 		},
 	})

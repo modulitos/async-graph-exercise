@@ -51,9 +51,10 @@ func crawlNode(nodeUri string, ch chan int, errs chan error) {
 	}
 
 	childChans := make([]chan int, len(data.Children))
-	for i, nodeUri := range data.Children {
+	for i, nodeId := range data.Children {
 		childChans[i] = make(chan int)
-		go crawlNode(nodeUri, childChans[i], errs)
+		// unsafe cast from string to byte:
+		go crawlNode(GetUriForNode(nodeId[0]), childChans[i], errs)
 	}
 
 	totalReward := data.Reward
