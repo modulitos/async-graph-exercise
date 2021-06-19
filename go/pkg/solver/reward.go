@@ -59,6 +59,10 @@ func crawlNode(nodeUri string, ch chan int, errs chan error) {
 
 	totalReward := data.Reward
 
+	// Instead of wait group, maybe we instead use a channel:
+	// https://talks.golang.org/2012/10things.slide#8
+	// although WaitGroup is probably cleaner.
+	// done := make(chan struct{})
 	wg := new(sync.WaitGroup)
 	wg.Add(len(data.Children))
 	for i := range childChans {

@@ -49,6 +49,7 @@ func setupMock(state map[string]NodeJSON) {
 // "table-driven tests" inspired by:
 // https://nathanleclaire.com/blog/2015/10/10/interfaces-and-composition-for-effective-unit-testing-in-golang/
 // and https://dave.cheney.net/2013/06/09/writing-table-driven-tests-in-go
+// and https://dave.cheney.net/2019/05/07/prefer-table-driven-tests
 func TestCalculateReward(t *testing.T) {
 	type args struct {
 		nodeId byte
@@ -62,23 +63,23 @@ func TestCalculateReward(t *testing.T) {
 		args
 		want
 	}{
-		"one node 100": {
+		"one_node_100": {
 			args: args{nodeId: 'a'},
 			want: want{reward: 100},
 		},
-		"one node 200": {
+		"one_node_200": {
 			args: args{nodeId: 'b'},
 			want: want{reward: 200},
 		},
-		"one node, 1 child": {
+		"one_node_1_child": {
 			args: args{nodeId: 'c'},
 			want: want{reward: 400},
 		},
-		"one node, 2 children": {
+		"one_node_2_children": {
 			args: args{nodeId: 'd'},
 			want: want{reward: 700},
 		},
-		"one node, with grandchildren": {
+		"one_node_with_grandchildren": {
 			args: args{nodeId: 'e'},
 			want: want{reward: 900},
 		},
