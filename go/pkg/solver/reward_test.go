@@ -80,9 +80,17 @@ func TestCalculateReward(t *testing.T) {
 			args: args{nodeId: 'd'},
 			want: want{reward: 700},
 		},
-		"one_node_with_grandchildren": {
+		"with_grandchildren": {
 			args: args{nodeId: 'e'},
 			want: want{reward: 900},
+		},
+		"caching_an_extra_call_to_a": {
+			args: args{nodeId: 'f'},
+			want: want{reward: 1400},
+		},
+		"caching_many_calls": {
+			args: args{nodeId: 'g'},
+			want: want{reward: 3300},
 		},
 		// // TODO: test error handling
 		// "one node, which doesn't exist": {
@@ -111,6 +119,14 @@ func TestCalculateReward(t *testing.T) {
 		formatter.GetUriForNode('e'): {
 			Children: []string{"c"},
 			Reward:   500,
+		},
+		formatter.GetUriForNode('f'): {
+			Children: []string{"d", "a"},
+			Reward:   600,
+		},
+		formatter.GetUriForNode('g'): {
+			Children: []string{"f", "a", "b", "b", "d"},
+			Reward:   700,
 		},
 	})
 

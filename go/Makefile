@@ -4,9 +4,9 @@ test.unit:
 	@$(INFO) "testing"
 	@go test ./... -v || $(FAIL)
 	@$(OK) "done"
-test.unit.one_node:
+test.unit.single:
 	@$(INFO) "testing"
-	@go test ./... -run TestCalculateReward/one_node_100 -v || $(FAIL)
+	@go test ./... -run TestCalculateReward/caching_many_calls -v || $(FAIL)
 	@$(OK) "done"
 build:
 	@$(INFO) "building"

@@ -44,11 +44,19 @@ func (nf *NodeFormatter) GetUriForNode(nodeId byte) string {
 type NodeService struct {
 	client    HttpClient
 	formatter NodeFormatter
+	cache     map[byte]NodeJSON
+	mu        sync.Mutex
 }
 
 func (ns *NodeService) GetNode(nodeId byte) (NodeJSON, error) {
-	// TODO: leverage a cache that checks whether a node has already been
-	// visited.
+	// Use node from cache, if possible:
+	ns.mu.Lock()
+	value, cacheContainsKey := ns.cache[nodeId]
+	ns.mu.Unlock()
+	if cacheContainsKey {
+		return value, nil
+	}
+
 	nodeUri := ns.formatter.GetUriForNode(nodeId)
 	request, err := http.NewRequest(http.MethodGet, nodeUri, nil)
 	resp, err := Client.Do(request)
@@ -61,6 +69,12 @@ func (ns *NodeService) GetNode(nodeId byte) (NodeJSON, error) {
 	if err := json.Unmarshal(body, &data); err != nil {
 		return NodeJSON{}, err
 	}
+
+	// Update the cache:
+	ns.mu.Lock()
+	ns.cache[nodeId] = data
+	ns.mu.Unlock()
+
 	return data, nil
 }
 
@@ -68,10 +82,11 @@ func NewNodeService() NodeService {
 	return NodeService{
 		client:    Client,
 		formatter: NewNodeFormatter(),
+		cache:     map[byte]NodeJSON{},
 	}
 }
 
-func crawlNode(nodeId byte, ch chan int, errs chan error, nodeService NodeService) {
+func crawlNode(nodeId byte, ch chan int, errs chan error, nodeService *NodeService) {
 	defer close(ch)
 
 	data, err := nodeService.GetNode(nodeId)
@@ -119,7 +134,7 @@ func CalculateReward(nodeId byte) (int, error) {
 
 	nodeService := NewNodeService()
 
-	go crawlNode(nodeId, ch, errs, nodeService)
+	go crawlNode(nodeId, ch, errs, &nodeService)
 
 	select {
 	// What if there are both errors and results?
